@@ -443,6 +443,58 @@ const app = createApp({
         <div class="voice-toast-text">"{{ voiceText }}"</div>
       </div>
     </transition>
+
+    <button class="chat-fab" :class="{ open: chatOpen }" @click="toggleChat" :title="chatOpen ? 'Tutup chat' : 'Chat dengan MiMo AI'">
+      <span v-if="!chatOpen">💬</span>
+      <span v-else>✕</span>
+    </button>
+
+    <transition name="chat-panel">
+      <div v-if="chatOpen" class="chat-panel">
+        <div class="chat-panel-header">
+          <div class="chat-panel-info">
+            <div class="chat-panel-avatar">MiMo</div>
+            <div>
+              <strong>MiMo AI</strong>
+              <small>{{ chatApiKey ? 'Xiaomi MiMo-V2.5-Pro' : 'Butuh API Key' }}</small>
+            </div>
+          </div>
+          <div class="chat-panel-actions">
+            <button @click="chatSettings = !chatSettings" title="Settings">⚙</button>
+            <button @click="clearChat" title="Hapus percakapan">🗑</button>
+          </div>
+        </div>
+
+        <div v-if="chatSettings" class="chat-settings">
+          <label>OpenRouter API Key</label>
+          <div class="chat-settings-row">
+            <input v-model="chatApiKeyInput" type="password" placeholder="sk-or-v1-..." />
+            <button @click="saveApiKey">Simpan</button>
+          </div>
+          <small>Dapatkan di <a href="https://openrouter.ai/settings/keys" target="_blank">openrouter.ai/settings/keys</a></small>
+          <div v-if="chatApiKey" class="chat-settings-status">✓ API Key tersimpan</div>
+        </div>
+
+        <div class="chat-messages" ref="chatMessagesRef">
+          <div v-if="chatMessages.length === 0" class="chat-empty">
+            <div class="chat-empty-icon">💬</div>
+            <p>Tanya apa saja ke MiMo AI</p>
+            <small>{{ chatApiKey ? 'Ketik pesan di bawah' : 'Atur API Key di ⚙ terlebih dahulu' }}</small>
+          </div>
+          <div v-for="(msg, i) in chatMessages" :key="i" class="chat-msg" :class="msg.role">
+            <div class="chat-msg-bubble">{{ msg.content }}</div>
+          </div>
+          <div v-if="chatLoading && !chatStreaming" class="chat-msg assistant">
+            <div class="chat-msg-bubble typing-indicator"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+
+        <form class="chat-input-bar" @submit.prevent="sendChatMessage">
+          <input v-model="chatInput" type="text" placeholder="Ketik pesan..." :disabled="chatLoading || !chatApiKey" />
+          <button type="submit" :disabled="chatLoading || !chatInput.trim() || !chatApiKey">→</button>
+        </form>
+      </div>
+    </transition>
   `,
   setup() {
     const sidebarOpen = ref(false);
@@ -453,6 +505,16 @@ const app = createApp({
     const voiceSupported = ref(false);
     let recognition = null;
     let toastTimer = null;
+
+    const chatOpen = ref(false);
+    const chatSettings = ref(false);
+    const chatApiKey = ref(localStorage.getItem("mimo-api-key") || "");
+    const chatApiKeyInput = ref("");
+    const chatMessages = ref([]);
+    const chatInput = ref("");
+    const chatLoading = ref(false);
+    const chatStreaming = ref(false);
+    const chatMessagesRef = ref(null);
 
     const voiceRoutes = {
       "beranda": "/",
@@ -518,6 +580,122 @@ const app = createApp({
       }
     }
 
+    function toggleChat() {
+      chatOpen.value = !chatOpen.value;
+      if (chatOpen.value) {
+        nextTick(scrollChatBottom);
+      }
+    }
+
+    function saveApiKey() {
+      const key = chatApiKeyInput.value.trim();
+      if (key) {
+        chatApiKey.value = key;
+        localStorage.setItem("mimo-api-key", key);
+        chatSettings.value = false;
+      }
+    }
+
+    function clearChat() {
+      chatMessages.value = [];
+    }
+
+    function scrollChatBottom() {
+      nextTick(() => {
+        if (chatMessagesRef.value) {
+          chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight;
+        }
+      });
+    }
+
+    async function sendChatMessage() {
+      const text = chatInput.value.trim();
+      if (!text || chatLoading.value || !chatApiKey.value) return;
+
+      chatMessages.value.push({ role: "user", content: text });
+      chatInput.value = "";
+      chatLoading.value = true;
+      scrollChatBottom();
+
+      const systemPrompt = "Anda adalah asisten AI bernama MiMo yang terintegrasi di website portfolio Wahyu Ramdhani. Jawab pertanyaan dengan ramah, singkat, dan informatif dalam Bahasa Indonesia. Jika ditanya tentang Wahyu Ramdhani, gunakan informasi: Web Manager di BPMP Provinsi NTB, pengalaman sejak 2018, fokus pada web development, digital transformation, system administration, multimedia.";
+      const apiMessages = [
+        { role: "system", content: systemPrompt },
+        ...chatMessages.value.map(m => ({ role: m.role, content: m.content }))
+      ];
+
+      try {
+        chatStreaming.value = true;
+        const assistantMsg = { role: "assistant", content: "" };
+        chatMessages.value.push(assistantMsg);
+
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + chatApiKey.value,
+            "Content-Type": "application/json",
+            "HTTP-Referer": window.location.origin,
+            "X-Title": "Wahyu Ramdhani Portfolio - MiMo Chatbot"
+          },
+          body: JSON.stringify({
+            model: "xiaomi/mimo-v2.5-pro",
+            messages: apiMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+            stream: true
+          })
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error?.message || "HTTP " + response.status);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data:")) continue;
+            const data = trimmed.slice(5).trim();
+            if (data === "[DONE]") break;
+            try {
+              const json = JSON.parse(data);
+              const content = json.choices?.[0]?.delta?.content;
+              if (content) {
+                assistantMsg.content += content;
+                scrollChatBottom();
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (!assistantMsg.content) {
+          assistantMsg.content = "Tidak ada respons dari AI.";
+        }
+      } catch (err) {
+        console.error("Chat error:", err);
+        const last = chatMessages.value[chatMessages.value.length - 1];
+        if (last && last.role === "assistant" && !last.content) {
+          last.content = "Error: " + err.message;
+        } else {
+          chatMessages.value.push({ role: "assistant", content: "Error: " + err.message });
+        }
+      } finally {
+        chatLoading.value = false;
+        chatStreaming.value = false;
+        scrollChatBottom();
+      }
+    }
+
     function closeSidebar() {
       sidebarOpen.value = false;
     }
@@ -530,6 +708,9 @@ const app = createApp({
     onMounted(() => {
       if (localStorage.getItem("wr-theme") === "light") {
         document.body.classList.add("light");
+      }
+      if (chatApiKey.value) {
+        chatApiKeyInput.value = chatApiKey.value;
       }
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -571,7 +752,7 @@ const app = createApp({
       clearTimeout(toastTimer);
     });
 
-    return { sidebarOpen, year, closeSidebar, toggleTheme, isListening, voiceText, voiceLabel, voiceSupported, toggleVoice };
+    return { sidebarOpen, year, closeSidebar, toggleTheme, isListening, voiceText, voiceLabel, voiceSupported, toggleVoice, chatOpen, chatSettings, chatApiKey, chatApiKeyInput, chatMessages, chatInput, chatLoading, chatStreaming, chatMessagesRef, toggleChat, saveApiKey, clearChat, sendChatMessage };
   }
 });
 
