@@ -431,10 +431,92 @@ const app = createApp({
         <div class="footer">© {{ year }} Wahyu Ramdhani. Portfolio & CV.</div>
       </main>
     </div>
+
+    <button class="voice-btn" :class="{ listening: isListening, active: voiceSupported }" @click="toggleVoice" :title="isListening ? 'Berhenti mendengarkan' : 'Klik untuk memberi perintah suara'">
+      <span v-if="isListening" class="voice-pulse"></span>
+      <span class="voice-icon">🎤</span>
+    </button>
+
+    <transition name="voice-toast">
+      <div v-if="voiceText" class="voice-toast">
+        <div class="voice-toast-label">{{ voiceLabel }}</div>
+        <div class="voice-toast-text">"{{ voiceText }}"</div>
+      </div>
+    </transition>
   `,
   setup() {
     const sidebarOpen = ref(false);
     const year = new Date().getFullYear();
+    const isListening = ref(false);
+    const voiceText = ref("");
+    const voiceLabel = ref("");
+    const voiceSupported = ref(false);
+    let recognition = null;
+    let toastTimer = null;
+
+    const voiceRoutes = {
+      "beranda": "/",
+      "home": "/",
+      "profil": "/profil",
+      "profile": "/profil",
+      "pengalaman": "/pengalaman",
+      "experience": "/pengalaman",
+      "proyek": "/proyek",
+      "project": "/proyek",
+      "projects": "/proyek",
+      "keahlian": "/keahlian",
+      "skill": "/keahlian",
+      "skills": "/keahlian",
+      "teknologi": "/teknologi",
+      "technology": "/teknologi",
+      "tech": "/teknologi",
+      "multimedia": "/multimedia",
+      "minat": "/minat",
+      "interest": "/minat",
+      "interests": "/minat",
+      "hobi": "/minat",
+      "kontak": "/kontak",
+      "contact": "/kontak",
+      "hubungi": "/kontak"
+    };
+
+    function showVoiceToast(label, text) {
+      voiceLabel.value = label;
+      voiceText.value = text;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        voiceText.value = "";
+        voiceLabel.value = "";
+      }, 3000);
+    }
+
+    function processCommand(transcript) {
+      const text = transcript.toLowerCase().trim();
+      for (const [keyword, path] of Object.entries(voiceRoutes)) {
+        if (text.includes(keyword)) {
+          showVoiceToast("Navigasi", keyword);
+          router.push(path);
+          return;
+        }
+      }
+      showVoiceToast("Tidak dikenal", transcript);
+    }
+
+    function toggleVoice() {
+      if (!voiceSupported.value) {
+        showVoiceToast("Error", "Browser tidak mendukung voice recognition");
+        return;
+      }
+      if (isListening.value) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (e) {
+          showVoiceToast("Error", "Gagal memulai voice recognition");
+        }
+      }
+    }
 
     function closeSidebar() {
       sidebarOpen.value = false;
@@ -449,9 +531,47 @@ const app = createApp({
       if (localStorage.getItem("wr-theme") === "light") {
         document.body.classList.add("light");
       }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        voiceSupported.value = true;
+        recognition = new SpeechRecognition();
+        recognition.lang = "id-ID";
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          isListening.value = true;
+          showVoiceToast("Mendengarkan", "Ucapkan nama halaman...");
+        };
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          processCommand(transcript);
+        };
+
+        recognition.onerror = (event) => {
+          isListening.value = false;
+          if (event.error === "no-speech") {
+            showVoiceToast("Info", "Tidak ada suara terdeteksi");
+          } else if (event.error !== "aborted") {
+            showVoiceToast("Error", event.error);
+          }
+        };
+
+        recognition.onend = () => {
+          isListening.value = false;
+        };
+      }
     });
 
-    return { sidebarOpen, year, closeSidebar, toggleTheme };
+    onUnmounted(() => {
+      if (recognition) recognition.abort();
+      clearTimeout(toastTimer);
+    });
+
+    return { sidebarOpen, year, closeSidebar, toggleTheme, isListening, voiceText, voiceLabel, voiceSupported, toggleVoice };
   }
 });
 
