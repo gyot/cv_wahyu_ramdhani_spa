@@ -518,10 +518,15 @@ const app = createApp({
     const chatMessagesRef = ref(null);
     const chatError = ref("");
 
+    const configKey = (typeof APP_CONFIG !== "undefined" && APP_CONFIG.OPENROUTER_API_KEY) ? APP_CONFIG.OPENROUTER_API_KEY : "";
     const savedKey = localStorage.getItem("mimo-api-key");
-    if (savedKey) {
-      chatApiKey.value = savedKey;
-      chatApiKeyInput.value = savedKey;
+    const initialKey = configKey || savedKey || "";
+    if (initialKey) {
+      chatApiKey.value = initialKey;
+      chatApiKeyInput.value = initialKey;
+      if (configKey && configKey !== savedKey) {
+        localStorage.setItem("mimo-api-key", configKey);
+      }
     }
 
     const voiceRoutes = {
