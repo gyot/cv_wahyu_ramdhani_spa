@@ -4,8 +4,8 @@ header('Cache-Control: no-cache');
 header('Connection: keep-alive');
 header('X-Accel-Buffering: no');
 
-$apiKey = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 $apiBase = 'https://9router.gdoank.my.id/v1';
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
@@ -14,26 +14,47 @@ $ch = curl_init();
 curl_setopt_array($ch, [
     CURLOPT_URL => $apiBase . '/chat/completions',
     CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $input,
-    CURLOPT_HTTPHEADER => [
+    CURLOPT_POSTFIELDS => json_encode($data),
+    CURLOPT_HTTPHEADER => array_filter([
         'Content-Type: application/json',
-        'Authorization: ' . $apiKey,
-    ],
-    CURLOPT_RETURNTRANSFER => false,
-    CURLOPT_HEADER => false,
+        $authHeader ? 'Authorization: ' . $authHeader : null,
+    ]),
+    CURLOPT_RETURNTRANSFER => true,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_TIMEOUT => 120,
-    CURLOPT_WRITEFUNCTION => function($ch, $chunk) {
-        echo $chunk;
-        flush();
-        if (ob_get_level() > 0) ob_flush();
-        return strlen($chunk);
-    },
+    CURLOPT_SSL_VERIFYPEER => true,
 ]);
 
-curl_exec($ch);
+$response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-if (curl_error($ch)) {
-    echo "data: " . json_encode(['error' => curl_error($ch)]) . "\n\n";
-}
+$error = curl_error($ch);
 curl_close($ch);
+
+if ($error) {
+    echo "data: " . json_encode(['error' => 'cURL: ' . $error]) . "\n\n";
+    flush();
+    exit;
+}
+
+if ($httpCode !== 200) {
+    echo "data: " . json_encode(['error' => 'HTTP ' . $httpCode . ': ' . $response]) . "\n\n";
+    flush();
+    exit;
+}
+
+$json = json_decode($response, true);
+
+if (isset($json['error'])) {
+    echo "data: " . json_encode(['error' => $json['error']['message'] ?? json_encode($json['error'])]) . "\n\n";
+    flush();
+    exit;
+}
+
+$content = $json['choices'][0]['message']['content'] ?? '';
+if ($content) {
+    echo "data: " . json_encode(['content' => $content]) . "\n\n";
+} else {
+    echo "data: " . json_encode(['content' => json_encode($json)]) . "\n\n";
+}
+echo "data: [DONE]\n\n";
+flush();

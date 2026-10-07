@@ -699,7 +699,11 @@ const app = createApp({
             if (data === "[DONE]") break;
             try {
               const json = JSON.parse(data);
-              const content = json.choices?.[0]?.delta?.content;
+              if (json.error) {
+                assistantMsg.content = "Error: " + json.error;
+                break;
+              }
+              const content = json.choices?.[0]?.delta?.content || json.content;
               if (content) {
                 assistantMsg.content += content;
                 scrollChatBottom();
