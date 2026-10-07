@@ -1,8 +1,5 @@
 <?php
-header('Content-Type: text/event-stream');
-header('Cache-Control: no-cache');
-header('Connection: keep-alive');
-header('X-Accel-Buffering: no');
+header('Content-Type: application/json');
 
 $apiBase = 'https://9router.gdoank.my.id/v1';
 $input = file_get_contents('php://input');
@@ -28,30 +25,21 @@ $error = curl_error($ch);
 curl_close($ch);
 
 if ($error) {
-    echo "data: " . json_encode(['error' => 'cURL: ' . $error]) . "\n\n";
-    flush();
-    exit;
-}
-
-if ($httpCode !== 200) {
-    echo "data: " . json_encode(['error' => 'HTTP ' . $httpCode . ': ' . $response]) . "\n\n";
-    flush();
+    echo json_encode(['error' => true, 'message' => 'cURL Error: ' . $error]);
     exit;
 }
 
 $json = json_decode($response, true);
 
+if ($httpCode !== 200) {
+    echo json_encode(['error' => true, 'message' => 'HTTP ' . $httpCode . ': ' . ($json['error']['message'] ?? $response)]);
+    exit;
+}
+
 if (isset($json['error'])) {
-    echo "data: " . json_encode(['error' => is_string($json['error']) ? $json['error'] : ($json['error']['message'] ?? json_encode($json['error']))]) . "\n\n";
-    flush();
+    echo json_encode(['error' => true, 'message' => is_string($json['error']) ? $json['error'] : ($json['error']['message'] ?? json_encode($json['error']))]);
     exit;
 }
 
 $content = $json['choices'][0]['message']['content'] ?? '';
-if ($content) {
-    echo "data: " . json_encode(['content' => $content]) . "\n\n";
-} else {
-    echo "data: " . json_encode(['content' => 'Respons kosong dari server. Response: ' . substr($response, 0, 300)]) . "\n\n";
-}
-echo "data: [DONE]\n\n";
-flush();
+echo json_encode(['error' => false, 'message' => $content ?: 'Respons kosong. Raw: ' . substr($response, 0, 500)]);

@@ -677,70 +677,77 @@ const app = createApp({
       try {
         chatStreaming.value = true;
 
-        const apiUrl = apiBaseUrl + "/chat/completions";
-        const headers = {
-          "Content-Type": "application/json",
-          "HTTP-Referer": window.location.origin,
-          "X-Title": "Wahyu Ramdhani Portfolio - MiMo Chatbot"
+        const useProxy = apiBaseUrl.includes('.php');
+        const apiUrl = useProxy ? apiBaseUrl : apiBaseUrl + "/chat/completions";
+        const body = {
+          model: apiModel,
+          messages: apiMessages,
+          temperature: 0.7,
+          max_tokens: 1024
         };
-        if (chatApiKey.value && chatApiKey.value !== "9router") {
+        if (!useProxy) body.stream = true;
+
+        const headers = { "Content-Type": "application/json" };
+        if (!useProxy && chatApiKey.value) {
           headers["Authorization"] = "Bearer " + chatApiKey.value;
         }
+
         const response = await fetch(apiUrl, {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            model: apiModel,
-            messages: apiMessages,
-            temperature: 0.7,
-            max_tokens: 1024,
-            stream: true
-          })
+          body: JSON.stringify(body)
         });
 
         if (!response.ok) {
           let errMsg = "HTTP " + response.status;
           try {
             const errData = await response.json();
-            errMsg = errData.error?.message || errData.message || errMsg;
+            errMsg = errData.message || errData.error?.message || errMsg;
           } catch (e) {}
           throw new Error(errMsg);
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+        if (useProxy) {
+          const result = await response.json();
+          if (result.error) {
+            throw new Error(result.message || "Error dari server");
+          }
+          assistantMsg.content = result.message || "Respons kosong dari AI.";
+        } else {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data:")) continue;
-            const data = trimmed.slice(5).trim();
-            if (data === "[DONE]") break;
-            try {
-              const json = JSON.parse(data);
-              if (json.error) {
-                assistantMsg.content = "Error: " + json.error;
-                break;
-              }
-              const content = json.choices?.[0]?.delta?.content || json.content;
-              if (content) {
-                assistantMsg.content += content;
-                scrollChatBottom();
-              }
-            } catch (e) {}
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith("data:")) continue;
+              const data = trimmed.slice(5).trim();
+              if (data === "[DONE]") break;
+              try {
+                const json = JSON.parse(data);
+                if (json.error) {
+                  assistantMsg.content = "Error: " + json.error;
+                  break;
+                }
+                const content = json.choices?.[0]?.delta?.content || json.content;
+                if (content) {
+                  assistantMsg.content += content;
+                  scrollChatBottom();
+                }
+              } catch (e) {}
+            }
           }
         }
 
         if (!assistantMsg.content) {
-          assistantMsg.content = "Tidak ada respons dari AI. Periksa API Key Anda.";
+          assistantMsg.content = "Tidak ada respons dari AI.";
         }
       } catch (err) {
         console.error("Chat error:", err);
