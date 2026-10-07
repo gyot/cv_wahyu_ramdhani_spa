@@ -1,18 +1,31 @@
 <?php
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-$apiBase = 'https://9router.gdoank.my.id/v1';
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+$apiBase = 'http://localhost:20128/v1';
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
+$apiKey = $data['api_key'] ?? '';
+unset($data['api_key']);
+
+$headers = ['Content-Type: application/json'];
+if ($apiKey) {
+    $headers[] = 'Authorization: Bearer ' . $apiKey;
+}
 
 $ch = curl_init();
 curl_setopt_array($ch, [
     CURLOPT_URL => $apiBase . '/chat/completions',
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => json_encode($data),
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-    ],
+    CURLOPT_HTTPHEADER => $headers,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_TIMEOUT => 120,
@@ -31,7 +44,7 @@ if ($error) {
 $json = json_decode($response, true);
 
 if ($httpCode !== 200) {
-    echo json_encode(['error' => true, 'message' => 'HTTP ' . $httpCode . ': ' . ($json['error']['message'] ?? $response)]);
+    echo json_encode(['error' => true, 'message' => 'HTTP ' . $httpCode . ': ' . ($json['error']['message'] ?? substr($response, 0, 500))]);
     exit;
 }
 

@@ -465,12 +465,12 @@ const app = createApp({
         </div>
 
         <div v-if="chatSettings" class="chat-settings">
-          <label>OpenRouter API Key</label>
+          <label>9Router API Key</label>
           <div class="chat-settings-row">
-            <input v-model="chatApiKeyInput" type="password" placeholder="sk-or-v1-..." />
+            <input v-model="chatApiKeyInput" type="password" placeholder="Masukkan API key dari9Router..." />
             <button @click="saveApiKey">Simpan</button>
           </div>
-          <small>Dapatkan di <a href="https://openrouter.ai/settings/keys" target="_blank">openrouter.ai/settings/keys</a></small>
+          <small>Ambil dari dashboard9Router → Endpoint & Key</small>
           <div v-if="chatApiKey" class="chat-settings-status">✓ API Key tersimpan</div>
         </div>
 
@@ -685,53 +685,20 @@ const app = createApp({
             messages: apiMessages,
             temperature: 0.7,
             max_tokens: 1024,
-            stream: true
+            api_key: chatApiKey.value
           })
         });
 
         if (!response.ok) {
-          let errMsg = "HTTP " + response.status;
-          try {
-            const errData = await response.json();
-            errMsg = errData.error?.message || errData.message || errMsg;
-          } catch (e) {}
-          throw new Error(errMsg);
+          throw new Error("HTTP " + response.status);
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data:")) continue;
-            const data = trimmed.slice(5).trim();
-            if (data === "[DONE]") break;
-            try {
-              const json = JSON.parse(data);
-              if (json.error) {
-                assistantMsg.content = "Error: " + (json.error.message || json.error);
-                break;
-              }
-              const content = json.choices?.[0]?.delta?.content;
-              if (content) {
-                assistantMsg.content += content;
-                scrollChatBottom();
-              }
-            } catch (e) {}
-          }
+        const result = await response.json();
+        if (result.error) {
+          throw new Error(result.message || "Error dari server");
         }
+        assistantMsg.content = result.message || "Respons kosong dari AI.";
 
-        if (!assistantMsg.content) {
-          assistantMsg.content = "Tidak ada respons dari AI.";
-        }
       } catch (err) {
         console.error("Chat error:", err);
         assistantMsg.content = "Error: " + err.message;
