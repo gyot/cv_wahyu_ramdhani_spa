@@ -444,58 +444,7 @@ const app = createApp({
       </div>
     </transition>
 
-    <button class="chat-fab" :class="{ open: chatOpen }" @click="toggleChat" :title="chatOpen ? 'Tutup chat' : 'Chat dengan MiMo AI'">
-      <span v-if="!chatOpen">💬</span>
-      <span v-else>✕</span>
-    </button>
 
-    <transition name="chat-panel">
-      <div v-if="chatOpen" class="chat-panel">
-        <div class="chat-panel-header">
-          <div class="chat-panel-info">
-            <div class="chat-panel-avatar">MiMo</div>
-            <div>
-              <strong>MiMo AI</strong>
-              <small>{{ chatApiKey ? 'Xiaomi MiMo-V2.5-Pro' : 'Butuh API Key' }}</small>
-            </div>
-          </div>
-          <div class="chat-panel-actions">
-            <button @click="chatSettings = !chatSettings" title="Settings">⚙</button>
-            <button @click="clearChat" title="Hapus percakapan">🗑</button>
-          </div>
-        </div>
-
-        <div v-if="chatSettings" class="chat-settings">
-          <label>OpenRouter API Key</label>
-          <div class="chat-settings-row">
-            <input v-model="chatApiKeyInput" type="password" placeholder="sk-or-v1-..." />
-            <button @click="saveApiKey">Simpan</button>
-          </div>
-          <small>Dapatkan di <a href="https://openrouter.ai/settings/keys" target="_blank">openrouter.ai/settings/keys</a></small>
-          <div v-if="chatApiKey" class="chat-settings-status">✓ API Key tersimpan</div>
-        </div>
-
-        <div class="chat-messages" ref="chatMessagesRef">
-          <div v-if="chatMessages.length === 0" class="chat-empty">
-            <div class="chat-empty-icon">💬</div>
-            <p>Tanya apa saja ke MiMo AI</p>
-            <small>{{ chatApiKey ? 'Ketik pesan di bawah' : 'Atur API Key di ⚙ terlebih dahulu' }}</small>
-          </div>
-          <div v-if="chatError" class="chat-error-msg">{{ chatError }}</div>
-          <div v-for="(msg, i) in chatMessages" :key="i" class="chat-msg" :class="msg.role">
-            <div class="chat-msg-bubble">{{ msg.content }}</div>
-          </div>
-          <div v-if="chatLoading && !chatStreaming" class="chat-msg assistant">
-            <div class="chat-msg-bubble typing-indicator"><span></span><span></span><span></span></div>
-          </div>
-        </div>
-
-        <form class="chat-input-bar" @submit.prevent="sendChatMessage">
-          <input v-model="chatInput" type="text" placeholder="Ketik pesan..." :disabled="chatLoading || !chatApiKey" />
-          <button type="submit" :disabled="chatLoading || !chatInput.trim() || !chatApiKey">→</button>
-        </form>
-      </div>
-    </transition>
   `,
   setup() {
     const sidebarOpen = ref(false);
