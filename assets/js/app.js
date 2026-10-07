@@ -529,6 +529,9 @@ const app = createApp({
       }
     }
 
+    const apiBaseUrl = (typeof APP_CONFIG !== "undefined" && APP_CONFIG.API_BASE_URL) ? APP_CONFIG.API_BASE_URL : "https://openrouter.ai/api/v1";
+    const apiModel = (typeof APP_CONFIG !== "undefined" && APP_CONFIG.MODEL) ? APP_CONFIG.MODEL : "xiaomi/mimo-v2.5-pro";
+
     const voiceRoutes = {
       "beranda": "/",
       "home": "/",
@@ -650,7 +653,7 @@ const app = createApp({
       try {
         chatStreaming.value = true;
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch(apiBaseUrl + "/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": "Bearer " + chatApiKey.value,
@@ -659,7 +662,7 @@ const app = createApp({
             "X-Title": "Wahyu Ramdhani Portfolio - MiMo Chatbot"
           },
           body: JSON.stringify({
-            model: "xiaomi/mimo-v2.5-pro",
+            model: apiModel,
             messages: apiMessages,
             temperature: 0.7,
             max_tokens: 1024,
