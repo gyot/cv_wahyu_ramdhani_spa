@@ -728,7 +728,6 @@ const app = createApp({
         recognition.onstart = () => {
           isListening.value = true;
           showVoiceToast("Mendengarkan", "Ucapkan nama halaman...");
-          speak("Silakan ucapkan nama halaman");
         };
 
         recognition.onresult = (event) => {
