@@ -386,7 +386,6 @@ const app = createApp({
   template: `
     <div class="sidebar" :class="{ open: sidebarOpen }" id="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-avatar"><img src="assets/foto_profil.JPG" alt="Wahyu Ramdhani"></div>
         <div>
           <span class="brand-name">Wahyu Ramdhani</span>
           <span class="brand-sub">Digital Portfolio</span>
