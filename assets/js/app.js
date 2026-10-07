@@ -653,7 +653,8 @@ const app = createApp({
       try {
         chatStreaming.value = true;
 
-        const response = await fetch(apiBaseUrl + "/chat/completions", {
+        const apiUrl = apiBaseUrl.includes('.php') ? apiBaseUrl : apiBaseUrl + "/chat/completions";
+        const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
             "Authorization": "Bearer " + chatApiKey.value,
