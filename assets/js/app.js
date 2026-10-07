@@ -677,72 +677,55 @@ const app = createApp({
       try {
         chatStreaming.value = true;
 
-        const useProxy = apiBaseUrl.includes('.php');
-        const apiUrl = useProxy ? apiBaseUrl : apiBaseUrl + "/chat/completions";
-        const body = {
-          model: apiModel,
-          messages: apiMessages,
-          temperature: 0.7,
-          max_tokens: 1024
-        };
-        if (!useProxy) body.stream = true;
-
-        const headers = { "Content-Type": "application/json" };
-        if (!useProxy && chatApiKey.value) {
-          headers["Authorization"] = "Bearer " + chatApiKey.value;
-        }
-
-        const response = await fetch(apiUrl, {
+        const response = await fetch(apiBaseUrl, {
           method: "POST",
-          headers,
-          body: JSON.stringify(body)
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: apiModel,
+            messages: apiMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+            stream: true
+          })
         });
 
         if (!response.ok) {
           let errMsg = "HTTP " + response.status;
           try {
             const errData = await response.json();
-            errMsg = errData.message || errData.error?.message || errMsg;
+            errMsg = errData.error?.message || errData.message || errMsg;
           } catch (e) {}
           throw new Error(errMsg);
         }
 
-        if (useProxy) {
-          const result = await response.json();
-          if (result.error) {
-            throw new Error(result.message || "Error dari server");
-          }
-          assistantMsg.content = result.message || "Respons kosong dari AI.";
-        } else {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || !trimmed.startsWith("data:")) continue;
-              const data = trimmed.slice(5).trim();
-              if (data === "[DONE]") break;
-              try {
-                const json = JSON.parse(data);
-                if (json.error) {
-                  assistantMsg.content = "Error: " + json.error;
-                  break;
-                }
-                const content = json.choices?.[0]?.delta?.content || json.content;
-                if (content) {
-                  assistantMsg.content += content;
-                  scrollChatBottom();
-                }
-              } catch (e) {}
-            }
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data:")) continue;
+            const data = trimmed.slice(5).trim();
+            if (data === "[DONE]") break;
+            try {
+              const json = JSON.parse(data);
+              if (json.error) {
+                assistantMsg.content = "Error: " + (json.error.message || json.error);
+                break;
+              }
+              const content = json.choices?.[0]?.delta?.content;
+              if (content) {
+                assistantMsg.content += content;
+                scrollChatBottom();
+              }
+            } catch (e) {}
           }
         }
 
