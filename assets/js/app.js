@@ -481,6 +481,7 @@ const app = createApp({
             <p>Tanya apa saja ke MiMo AI</p>
             <small>{{ chatApiKey ? 'Ketik pesan di bawah' : 'Atur API Key di ⚙ terlebih dahulu' }}</small>
           </div>
+          <div v-if="chatError" class="chat-error-msg">{{ chatError }}</div>
           <div v-for="(msg, i) in chatMessages" :key="i" class="chat-msg" :class="msg.role">
             <div class="chat-msg-bubble">{{ msg.content }}</div>
           </div>
@@ -508,13 +509,20 @@ const app = createApp({
 
     const chatOpen = ref(false);
     const chatSettings = ref(false);
-    const chatApiKey = ref(localStorage.getItem("mimo-api-key") || "");
+    const chatApiKey = ref("");
     const chatApiKeyInput = ref("");
     const chatMessages = ref([]);
     const chatInput = ref("");
     const chatLoading = ref(false);
     const chatStreaming = ref(false);
     const chatMessagesRef = ref(null);
+    const chatError = ref("");
+
+    const savedKey = localStorage.getItem("mimo-api-key");
+    if (savedKey) {
+      chatApiKey.value = savedKey;
+      chatApiKeyInput.value = savedKey;
+    }
 
     const voiceRoutes = {
       "beranda": "/",
@@ -593,11 +601,13 @@ const app = createApp({
         chatApiKey.value = key;
         localStorage.setItem("mimo-api-key", key);
         chatSettings.value = false;
+        chatError.value = "";
       }
     }
 
     function clearChat() {
       chatMessages.value = [];
+      chatError.value = "";
     }
 
     function scrollChatBottom() {
@@ -610,23 +620,30 @@ const app = createApp({
 
     async function sendChatMessage() {
       const text = chatInput.value.trim();
-      if (!text || chatLoading.value || !chatApiKey.value) return;
+      if (!text || chatLoading.value) return;
+
+      if (!chatApiKey.value) {
+        chatSettings.value = true;
+        chatError.value = "Masukkan API Key terlebih dahulu.";
+        return;
+      }
 
       chatMessages.value.push({ role: "user", content: text });
       chatInput.value = "";
       chatLoading.value = true;
+      chatError.value = "";
       scrollChatBottom();
 
       const systemPrompt = "Anda adalah asisten AI bernama MiMo yang terintegrasi di website portfolio Wahyu Ramdhani. Jawab pertanyaan dengan ramah, singkat, dan informatif dalam Bahasa Indonesia. Jika ditanya tentang Wahyu Ramdhani, gunakan informasi: Web Manager di BPMP Provinsi NTB, pengalaman sejak 2018, fokus pada web development, digital transformation, system administration, multimedia.";
-      const apiMessages = [
-        { role: "system", content: systemPrompt },
-        ...chatMessages.value.map(m => ({ role: m.role, content: m.content }))
-      ];
+
+      const historyForApi = chatMessages.value.map(m => ({ role: m.role, content: m.content }));
+      const apiMessages = [{ role: "system", content: systemPrompt }, ...historyForApi];
+
+      const assistantMsg = { role: "assistant", content: "" };
+      chatMessages.value.push(assistantMsg);
 
       try {
         chatStreaming.value = true;
-        const assistantMsg = { role: "assistant", content: "" };
-        chatMessages.value.push(assistantMsg);
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
@@ -646,8 +663,12 @@ const app = createApp({
         });
 
         if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.error?.message || "HTTP " + response.status);
+          let errMsg = "HTTP " + response.status;
+          try {
+            const errData = await response.json();
+            errMsg = errData.error?.message || errData.message || errMsg;
+          } catch (e) {}
+          throw new Error(errMsg);
         }
 
         const reader = response.body.getReader();
@@ -660,7 +681,7 @@ const app = createApp({
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
-          buffer = lines.pop();
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             const trimmed = line.trim();
@@ -679,16 +700,12 @@ const app = createApp({
         }
 
         if (!assistantMsg.content) {
-          assistantMsg.content = "Tidak ada respons dari AI.";
+          assistantMsg.content = "Tidak ada respons dari AI. Periksa API Key Anda.";
         }
       } catch (err) {
         console.error("Chat error:", err);
-        const last = chatMessages.value[chatMessages.value.length - 1];
-        if (last && last.role === "assistant" && !last.content) {
-          last.content = "Error: " + err.message;
-        } else {
-          chatMessages.value.push({ role: "assistant", content: "Error: " + err.message });
-        }
+        assistantMsg.content = "Error: " + err.message;
+        chatError.value = err.message;
       } finally {
         chatLoading.value = false;
         chatStreaming.value = false;
@@ -752,7 +769,7 @@ const app = createApp({
       clearTimeout(toastTimer);
     });
 
-    return { sidebarOpen, year, closeSidebar, toggleTheme, isListening, voiceText, voiceLabel, voiceSupported, toggleVoice, chatOpen, chatSettings, chatApiKey, chatApiKeyInput, chatMessages, chatInput, chatLoading, chatStreaming, chatMessagesRef, toggleChat, saveApiKey, clearChat, sendChatMessage };
+    return { sidebarOpen, year, closeSidebar, toggleTheme, isListening, voiceText, voiceLabel, voiceSupported, toggleVoice, chatOpen, chatSettings, chatApiKey, chatApiKeyInput, chatMessages, chatInput, chatLoading, chatStreaming, chatMessagesRef, chatError, toggleChat, saveApiKey, clearChat, sendChatMessage };
   }
 });
 

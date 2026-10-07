@@ -1284,6 +1284,15 @@ body.light .voice-toast-text {
   cursor: not-allowed;
 }
 
+.chat-error-msg {
+  padding: 8px 12px;
+  background: rgba(232,17,35,.1);
+  border-left: 3px solid var(--tile-red);
+  color: var(--tile-red);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
 .chat-panel-enter-active,
 .chat-panel-leave-active {
   transition: opacity .2s ease, transform .2s ease;
