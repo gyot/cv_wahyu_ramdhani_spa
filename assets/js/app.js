@@ -516,16 +516,41 @@ const app = createApp({
       }, 3000);
     }
 
+    function speak(text) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "id-ID";
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    const voicePageNames = {
+      "/": "Beranda",
+      "/profil": "Halaman Profil",
+      "/pengalaman": "Halaman Pengalaman",
+      "/proyek": "Halaman Proyek",
+      "/keahlian": "Halaman Keahlian",
+      "/teknologi": "Halaman Teknologi",
+      "/multimedia": "Halaman Multimedia",
+      "/minat": "Halaman Minat",
+      "/kontak": "Halaman Kontak"
+    };
+
     function processCommand(transcript) {
       const text = transcript.toLowerCase().trim();
       for (const [keyword, path] of Object.entries(voiceRoutes)) {
         if (text.includes(keyword)) {
+          const pageName = voicePageNames[path] || keyword;
           showVoiceToast("Navigasi", keyword);
+          speak("Membuka " + pageName);
           router.push(path);
           return;
         }
       }
       showVoiceToast("Tidak dikenal", transcript);
+      speak("Perintah tidak dikenali");
     }
 
     function toggleVoice() {
@@ -703,6 +728,7 @@ const app = createApp({
         recognition.onstart = () => {
           isListening.value = true;
           showVoiceToast("Mendengarkan", "Ucapkan nama halaman...");
+          speak("Silakan ucapkan nama halaman");
         };
 
         recognition.onresult = (event) => {
@@ -714,6 +740,7 @@ const app = createApp({
           isListening.value = false;
           if (event.error === "no-speech") {
             showVoiceToast("Info", "Tidak ada suara terdeteksi");
+            speak("Tidak ada suara terdeteksi");
           } else if (event.error !== "aborted") {
             showVoiceToast("Error", event.error);
           }
